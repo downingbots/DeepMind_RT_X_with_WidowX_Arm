@@ -1,0 +1,14 @@
+{ 
+   "camera_name"          : "realsense",
+   "video_width"          : 320,
+   "video_height"         : 256,
+   "video_stream_provider": 2,
+   "cam_usb"              : "usb-0000:00:14.0-2.2",
+   "arm_usb"              : "0403:6001",
+   "image_dir"            : "/tmp",
+   "retry_on_fail"        : false,
+   "saved_model_path"     : "~/google_rt/rt_1_x_tf/rt_1_x_tf_trained_for_002272480_step",
+   "language_instruction" : "push blue cube to left",
+   "initial_state"        : "{\"x\":20, \"y\":0, \"z\":12, \"gamma\":-254, \"rot\":0, \"gripper\":1}"
+}
+
