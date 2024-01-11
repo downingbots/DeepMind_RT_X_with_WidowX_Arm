@@ -46,52 +46,6 @@ def resize(image):
     image = tf.cast(image, tf.uint8)
     return image
 
-def rescale_action_with_bound(
-      actions: tf.Tensor,
-      low: float,
-      high: float,
-      safety_margin: float = 0,
-      post_scaling_max: float = 1.0,
-      post_scaling_min: float = -1.0,
-  ) -> tf.Tensor:
-    """Formula taken from https://stats.stackexchange.com/questions/281162/scale-a-number-between-a-range."""
-
-    # resc_actions = (actions - low) / (high - low) * (
-    #     post_scaling_max - post_scaling_min
-    # ) + post_scaling_min
-    resc_actions = (actions*(high - low)*1000 + low) 
-    return tf.clip_by_value(
-        resc_actions,
-        post_scaling_min + safety_margin,
-        post_scaling_max - safety_margin,
-    )
-
-def rescale_action(action):
-    """Rescales action."""
-
-    return action
-    # [-127,127] for vx, vy and vz and [-255,255] for vg
-    # 255 < wrist_rotate velocity < 0
-    # 255 < wrist_angle_velocity < 0
-    # 41cm horizontal reach and 55cm verticle
-    action['world_vector'] = rescale_action_with_bound(
-      action['world_vector'],
-      low = -127,
-      high = 127,
-      safety_margin=0.00,
-      post_scaling_max=127,
-      post_scaling_min=127,
-    )
-    action['rotation_delta'] = rescale_action_with_bound(
-      action['rotation_delta'],
-      low = -255,
-      high = 255,
-      safety_margin=0,
-      post_scaling_max=-255,
-      post_scaling_min=255,
-    )
-    return action
-
 ###################################################3
 def read_config():
     with open('rt1_widowx_config.json') as config_file:
@@ -244,15 +198,14 @@ while True:
   
   ####################
   # result from rt_1_x
-  action = policy_step.action
-  predicted_actions.append(action)
-  print("action:",action)
+  robot_action = policy_step.action
+  predicted_actions.append(robot_action)
+  print("action:",robot_action)
   # ts is timestep class
   tfa_time_step = ts.transition(observation, reward=np.zeros((), dtype=np.float32))
   
   policy_state = policy_step.state
   
-  robot_action = rescale_action(action)
   wv = robot_action['world_vector']
   euler = robot_action['rotation_delta']
   gripper_action = robot_action['gripper_closedness_action']
@@ -265,13 +218,13 @@ while True:
   ############################################################
   # Move the robot based on predicted action and take snapshot
   ############################################################
-  # denormalize action (rescaled above)
+  # denormalize action 
   # widowx has 41cm horizontal reach and 55cm verticle (up)
-  vx = round(wv[x])
-  vy = round(wv[y])
-  vz = round(wv[z])
-  vg = round(euler[0])
-  vq5 = round(euler[1])
+  vx = min(max(-127, round(wv[x] * 127.0 / 1.75)), 127)
+  vy = min(max(-127, round(wv[y] * 127.0 / 1.75)), 127)
+  vz = min(max(-127, round(wv[z] * 127.0 / 1.75)), 127)
+  vg = min(max(-255, round(euler[0] * 255.0 / 1.4)), 255)
+  vq5 = min(max(-255, round(euler[1] * 256.0 / 1.4)), 255)
   [success, err_msg] = robot_arm.move(vx, vy, vz, vg, vq5, gripper_open)
   if not success:
     print("Bad start point", px, py, pz, pg, pq5, gripper_open)
@@ -285,8 +238,8 @@ while True:
   observation = tf_agents.specs.zero_spec_nest(tf_agents.specs.from_spec(tfa_policy.time_step_spec.observation))
   tfa_time_step = ts.transition(observation, reward=np.zeros((), dtype=np.float32))
 
-  print('is_terminal:', action['terminate_episode'])
-  is_term = action['terminate_episode']
+  print('is_terminal:', robot_action['terminate_episode'])
+  is_term = robot_action['terminate_episode']
   if is_term[0] == 1:
     break
 

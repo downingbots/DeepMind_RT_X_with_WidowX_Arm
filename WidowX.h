@@ -60,6 +60,7 @@ public:
     void checkVoltage();
     void getCurrentPosition();
     void getCurrentPosition(uint8_t until_idx);
+    void SetPosition2(int idx, int pos);
     int getServoPosition(int idx);
     float getServoAngle(int idx);
     void getPoint(float *p);

@@ -48,6 +48,8 @@ long t0;
 int currentTime, remainingTime;
 float curr_2, curr_3;
 
+// The mounting of Q1 is off by approx 1/16 rotation when converting from REPLAB to BRIDGE
+#define Q1_ADJUST   (1 * (MX_MAX_POSITION_VALUE+1) / 32 + 28)
 //////////////////////////////////////////////////////////////////////////////////////
 /*
     *** PUBLIC FUNCTIONS ***
@@ -201,6 +203,18 @@ void WidowX::getCurrentPosition(uint8_t until_idx)
     }
 }
 
+void WidowX::SetPosition2(int servo_id, int pos)
+{
+    if (servo_id == id[0]) {
+      if (pos-Q1_ADJUST < 0 or pos-Q1_ADJUST > MX_MAX_POSITION_VALUE)
+        // Q1 is an MX-28
+        Serial.println("Error: Position out of range for Q1");
+      else
+        SetPosition(servo_id, pos-Q1_ADJUST);
+    } else
+      SetPosition(servo_id, pos);
+}
+
 /*
  * This function calls the GetPosition function from the ax12.h library. However, 
  * it was seen that in some cases the value returned was -1. Hence, it made the 
@@ -217,12 +231,18 @@ int WidowX::getServoPosition(int idx)
 {
     uint8_t i = 0;
     uint16_t prev = current_position[idx];
-    current_position[idx] = GetPosition(id[idx]);
+    if (idx == 0)
+      current_position[idx] = GetPosition(id[idx]) + Q1_ADJUST;
+    else
+      current_position[idx] = GetPosition(id[idx]);
     while (current_position[idx] == -1)
     {
         i = (i % 10) + 1;
         delay(5 * i);
-        current_position[idx] = GetPosition(id[idx]);
+        if (idx == 0)
+          current_position[idx] = GetPosition(id[idx]) + Q1_ADJUST;
+        else
+          current_position[idx] = GetPosition(id[idx]);
     }
     current_angle[idx] = positionToAngle(idx, current_position[idx]);
     float_position[idx] = current_position[idx];
@@ -297,7 +317,7 @@ void WidowX::moveServo2Angle(int idx, float angle)
     {
         while (curr < pos)
         {
-            SetPosition(id[idx], ++curr);
+            SetPosition2(id[idx], ++curr);
             delay(1);
         }
     }
@@ -305,7 +325,7 @@ void WidowX::moveServo2Angle(int idx, float angle)
     {
         while (curr > pos)
         {
-            SetPosition(id[idx], --curr);
+            SetPosition2(id[idx], --curr);
             delay(1);
         }
     }
@@ -325,7 +345,7 @@ void WidowX::moveServo2Position(int idx, int pos)
     {
         while (curr < pos)
         {
-            SetPosition(id[idx], ++curr);
+            SetPosition2(id[idx], ++curr);
             delay(1);
         }
     }
@@ -333,7 +353,7 @@ void WidowX::moveServo2Position(int idx, int pos)
     {
         while (curr > pos)
         {
-            SetPosition(id[idx], --curr);
+            SetPosition2(id[idx], --curr);
             delay(1);
         }
     }
@@ -373,7 +393,7 @@ void WidowX::moveGrip(int close)
             posQ6 = 512;
         }
     }
-    SetPosition(id[5], posQ6);
+    SetPosition2(id[5], posQ6);
 }
 
 void WidowX::openCloseGrip(int close)
@@ -388,7 +408,7 @@ void WidowX::openCloseGrip(int close)
                 posQ6 -= 10;
             else
                 posQ6 = 0;
-            SetPosition(id[5], posQ6);
+            SetPosition2(id[5], posQ6);
             delay(10);
         }
     }
@@ -402,7 +422,7 @@ void WidowX::openCloseGrip(int close)
                 posQ6 += 10;
             else
                 posQ6 = 512;
-            SetPosition(id[5], posQ6);
+            SetPosition2(id[5], posQ6);
             delay(10);
         }
     }
@@ -414,7 +434,7 @@ void WidowX::openCloseGrip(int close)
 */
 void WidowX::setServo2Position(int idx, int position)
 {
-    SetPosition(id[idx], position);
+    SetPosition2(id[idx], position);
 }
 
 void WidowX::moveServoWithSpeed(int idx, int speed, long initial_time)
@@ -427,7 +447,7 @@ void WidowX::moveServoWithSpeed(int idx, int speed, long initial_time)
         lim_up = 4095;
     }
     float_position[idx] = max(0, min(lim_up, float_position[idx] + speed * Ks * tf));
-    SetPosition(id[idx], round(float_position[idx]));
+    SetPosition2(id[idx], round(float_position[idx]));
 }
 
 //Move Arm
@@ -954,7 +974,9 @@ float WidowX::printState(const char *s1)
 //Conversions
 float WidowX::positionToAngle(int idx, int position)
 {
-    if (idx == 0 || idx == 3 || idx == 2) //MX-28 || MX-64
+    if (idx == 0)
+          return 0.00153435538637 * (position - 2047.5 - Q1_ADJUST);
+    else if (idx == 0 || idx == 3 || idx == 2) //MX-28 || MX-64
           //0 - 4095, 0.088°
           // 0° - 360°
           return 0.00153435538637 * (position - 2047.5);
@@ -1012,12 +1034,6 @@ void WidowX::updatePoint()
     speed_points[0] = point[0];
     speed_points[1] = point[1];
     speed_points[2] = point[2];
-    if (0) {
-        char ln[400];
-        sprintf(ln, "Uppt %f %f %f %d %d", point[0], point[1], point[2], int(q4), int(phi2));
-        Serial.println(ln);
-        delay(200);
-    }
 }
 
 /*
@@ -1062,18 +1078,18 @@ void WidowX::interpolate(int remTime)
         for (i = 0; i < SERVOCOUNT - 1; i++)
         {
             next_position[i] = round(W[i][0] + W[i][1] * currentTime + W[i][2] * curr_2 + W[i][3] * curr_3);
-            SetPosition(id[i], next_position[i]);
+            SetPosition2(id[i], next_position[i]);
         }
 
         delay(10);
         currentTime = millis() - t0;
     }
 
-    SetPosition(id[0], desired_position[0]);
-    SetPosition(id[1], desired_position[1]);
-    SetPosition(id[2], desired_position[2]);
-    SetPosition(id[3], desired_position[3]);
-    SetPosition(id[4], desired_position[4]);
+    SetPosition2(id[0], desired_position[0]);
+    SetPosition2(id[1], desired_position[1]);
+    SetPosition2(id[2], desired_position[2]);
+    SetPosition2(id[3], desired_position[3]);
+    SetPosition2(id[4], desired_position[4]);
     delay(3);
 }
 
@@ -1095,18 +1111,18 @@ void WidowX::interpolateFromPose(const unsigned int *pose, int remTime)
         for (i = 0; i < SERVOCOUNT - 1; i++)
         {
             next_position[i] = round(W[i][0] + W[i][1] * currentTime + W[i][2] * curr_2 + W[i][3] * curr_3);
-            SetPosition(id[i], next_position[i]);
+            SetPosition2(id[i], next_position[i]);
         }
 
         delay(10);
         currentTime = millis() - t0;
     }
 
-    SetPosition(id[0], desired_position[0]);
-    SetPosition(id[1], desired_position[1]);
-    SetPosition(id[2], desired_position[2]);
-    SetPosition(id[3], desired_position[3]);
-    SetPosition(id[4], desired_position[4]);
+    SetPosition2(id[0], desired_position[0]);
+    SetPosition2(id[1], desired_position[1]);
+    SetPosition2(id[2], desired_position[2]);
+    SetPosition2(id[3], desired_position[3]);
+    SetPosition2(id[4], desired_position[4]);
     // SetPosition(id[5], desired_position[5]);
     delay(3);
 }
@@ -1135,11 +1151,10 @@ void WidowX::setArmGamma(float Px, float Py, float Pz, float gamma)
     for (int i = 0; i < 4; i++)
     {
         desired_position[i] = angleToPosition(i, desired_angle[i]);
-        cubeInterpolation(current_position[i], desired_position[i], W[i], DEFAULT_TIME);
     }
-    sprintf(line,"des_pos: %d %d %d %d", desired_position[0], desired_position[1], desired_position[2], desired_position[3]);
+    sprintf(line,"des_pos,spd: %d %d %d %d ; %d %d %d %d", desired_position[0], desired_position[1], desired_position[2], desired_position[3], int(Px*1000), int(Py*1000), int(Pz*1000), int(gamma*1000));
     Serial.println(line);
-    // syncWrite(4);
+    syncWrite(4);
 }
 
 void WidowX::syncWrite(uint8_t numServos)

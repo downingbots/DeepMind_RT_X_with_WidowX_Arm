@@ -40,9 +40,10 @@ For the arduino IDE and the interbotix board, follow the WidowX Mark II README b
 
 ## RESULTS
 
-The results are disappointing.  The RT-X model appears to be properly controlling the robot arm and seems to perform Robot arm actions inspired by the "language instruction" and the image.  However, it appears to be pure luck if it actually performs a successful action.  Potential reasons for this:
+The results are disappointing.  The RT-X model appears to be properly controlling the robot arm and seems to perform Robot arm actions inspired by the "language instruction" and the image. Unfortunately, it appears to be pure luck if it actually performs a successful action.  Potential reasons for this:
   - The robot arm and its configuration is not an exact match to that used to gather much of the BridgeData dataset.  Some RT-X data may have been gathered using the WidowX Mark II robot arm, but using an overhead configuration. Most of the BridgeData dataset used a next-generation and longer low-end robot arm.  
   - The test objects and language instructions are based upon those used to gather the BridgeData dataset.  However, they were close but not exact matches.
+  - Bugs in my code are still being found.
 
 Yet, the purpose of the DeepMind dataset was to illustrate generalization of robot arm control by being trained on the largest robot dataset thus-far collected. Given the environment was just a "previous generation" variation of the BridgeData hardware configuration, I had hoped that the RT-X model would be able to better generalize.
 
