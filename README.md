@@ -1,6 +1,6 @@
 # USING DEEPMIND'S RT-X MODEL WITH A LOW-END ROBOT ARM
 
-The purpose of the DeepMind dataset was to illustrate generalization of robot arm control by training on the largest robot dataset thus-far collected.  This repository provides a bare-bones implementation to run the RT-X Models with a low-end robot arm. The laptop code is python-only and doesn't use ROS.  Hopefully, this repository will lower the barrier of entry for others to experiment with the most advanced text-to-robot-action models currently available. This code fills in some of the gaps necessary to drive a robot arm from DeepMind's minimal example.  However, the experimental results were disappointing. I had hoped that the RT-X model would be able to better generalize to a "previous generation" variation of the BridgeData hardware configuration.  Oh well.
+The purpose of the DeepMind dataset was to illustrate generalization of robot arm control by training on the largest robot dataset thus-far collected.  This repository provides a bare-bones implementation to run the RT-X Models with a low-end robot arm. The laptop code is python-only and doesn't use ROS.  Hopefully, this repository will lower the barrier of entry for others to experiment with the most advanced text-to-robot-action models currently available. This code fills in some of the gaps necessary to drive a robot arm from DeepMind's minimal example.  I am hoping that the RT-X model would be able to better generalize to a "previous generation" variation of the BridgeData hardware configuration. 
 
 ## BACKGROUND
 
@@ -39,11 +39,10 @@ For the arduino IDE and the interbotix board, follow the WidowX Mark II README b
  - MoveWithController.ino : modified to goto initial starting position, and return required state.
 
 ## RESULTS
-
-The results are disappointing.  The RT-X model appears to be properly controlling the robot arm and seems to perform Robot arm actions inspired by the "language instruction" and the image. Unfortunately, it appears to be pure luck if it actually performs a successful action.  Potential reasons for this:
+The RT-X model appears to be properly controlling the robot arm and seems to perform Robot arm actions inspired by the "language instruction" and the image. Unfortunately, it appears to be pure luck if it actually performs a successful action.  Potential reasons for this:
+  - Bugs in my code are still being found.
   - The robot arm and its configuration is not an exact match to that used to gather much of the BridgeData dataset.  Some RT-X data may have been gathered using the WidowX Mark II robot arm, but using an overhead configuration. Most of the BridgeData dataset used a next-generation and longer low-end robot arm.  
   - The test objects and language instructions are based upon those used to gather the BridgeData dataset.  However, they were close but not exact matches.
-  - Bugs in my code are still being found.
 
 Yet, the purpose of the DeepMind dataset was to illustrate generalization of robot arm control by being trained on the largest robot dataset thus-far collected. Given the environment was just a "previous generation" variation of the BridgeData hardware configuration, I had hoped that the RT-X model would be able to better generalize.
 
