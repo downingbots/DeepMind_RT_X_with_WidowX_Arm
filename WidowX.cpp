@@ -476,6 +476,20 @@ void WidowX::movePointWithSpeed(int vx, int vy, int vz, int vg, long initial_tim
     setArmGamma(speed_points[0], speed_points[1], speed_points[2], global_gamma);
 }
 
+void WidowX::movePointWithSpeed(float vx, float vy, float vz, float vg, long initial_time)
+{
+    char line[200];
+    int tf = millis() - initial_time;
+    
+    sprintf(line,"1000xyzg: %d %d %d %d", int(vx*1000), int(vy*1000), int(vz*1000), int(vg*1000));
+    Serial.println(line);
+    speed_points[0] = max(-xy_lim, min(xy_lim, speed_points[0] + vx * Kp * tf));
+    speed_points[1] = max(-xy_lim, min(xy_lim, speed_points[1] + vy * Kp * tf));
+    speed_points[2] = max(z_lim_down, min(z_lim_up, speed_points[2] + vz * Kp * tf));
+    global_gamma = max(-gamma_lim, min(gamma_lim, global_gamma + vg * Kg * tf));
+    setArmGamma(speed_points[0], speed_points[1], speed_points[2], global_gamma);
+}
+
 /*
     This function also moves the arm when controlled with a joystick or controller, 
     just as movePointWithSpeed(). However, while the other function moves according 
@@ -602,12 +616,13 @@ void WidowX::moveArmGammaController(float Px, float Py, float Pz, float gamma)
     wristAngle = asin(gamma / 255.0);
     Serial.println("moveCenter");
     moveCenter();
-    delay(3000);
+    delay(2000);
     getCurrentPosition();
     moveServo2Angle(3, wristAngle);
+
     sprintf(line,"wristAngle*1000: %d %d", int(gamma), int(1000*wristAngle));
     Serial.println(line);
-    delay(3000);
+    delay(2000);
     printState("CenterGamma:");
     updatePoint();
     return;
@@ -661,7 +676,7 @@ void WidowX::moveArmGammaController(float Px, float Py, float Pz, float gamma)
           return;
         } else break;
       }
-      Serial.println(failure);
+      // Serial.println(failure);
       if (!failure) { 
         if (best_gm == -1 or abs(best_gm) < abs(gm)) {
           if (gamma < 0)
@@ -949,9 +964,9 @@ float WidowX::printState(const char *s1)
 
     getPoint(p);
     // Serial.println(line);
-    c[0] = (int8_t)(round(p[0]));
-    c[1] = (int8_t)(round(p[1]));
-    c[2] = (int8_t)(round(p[2]));
+    c[0] = (int)(round(p[0]));
+    c[1] = (int)(round(p[1]));
+    c[2] = (int)(round(p[2]));
     wrist_angle = int(sin(getServoAngle(3)) * 255); 
     wrist_rot   = int(sin(getServoAngle(4)) * 255);
     grip        = cos(getServoAngle(5));
@@ -974,13 +989,13 @@ float WidowX::printState(const char *s1)
 //Conversions
 float WidowX::positionToAngle(int idx, int position)
 {
-    if (idx == 0)
-          return 0.00153435538637 * (position - 2047.5 - Q1_ADJUST);
-    else if (idx == 0 || idx == 3 || idx == 2) //MX-28 || MX-64
+    if (idx == 0 || idx == 3 || idx == 2) //MX-28 || MX-64
+    // if (idx == 3 || idx == 2) //MX-28 || MX-64
           //0 - 4095, 0.088°
           // 0° - 360°
           return 0.00153435538637 * (position - 2047.5);
-    else if (idx == 1) //MX-64
+    else if (idx == 1)
+    // else if (idx == 1 || idx == 0)
           //0 - 4095, 0.088°
           // 0° - 360°
           return -0.00153435538637 * (position - 2047.5);
@@ -1000,12 +1015,13 @@ int WidowX::angleToPosition(int idx, float angle)
             angle += 2 * M_PI;
     }
     if (idx == 0 || idx == 3 || idx == 2) //MX-28 || MX-64
+    // if (idx == 3 || idx == 2) //MX-28 || MX-64
         //0 - 4095, 0.088°
         // 0° - 360°
         // return (int)651.74 * angle + 2048;
         return round(651.739492 * angle + 2047.5);
-
     else if (idx == 1) //MX-64
+    // else if (idx == 1 || idx == 0) //MX-64
         //0 - 4095, 0.088°
         // 0° - 360°
         return round(-651.739492 * angle + 2047.5);
@@ -1019,6 +1035,8 @@ int WidowX::angleToPosition(int idx, float angle)
 
 void WidowX::updatePoint()
 {
+    char line[200];
+
     // getCurrentPosition();
     q1 = getServoAngle(0);
     q2 = getServoAngle(1);
@@ -1028,9 +1046,12 @@ void WidowX::updatePoint()
     phi2 = D * cos(alpha + q2) + L3 * cos(q2 + q3) + L4 * cos(q2 + q3 + q4);
     global_gamma = -q2 - q3 - q4;
 
+    Serial.println(line);
+
     point[0] = cos(q1) * phi2;
     point[1] = sin(q1) * phi2;
     point[2] = L0 + D * sin(alpha + q2) + L3 * sin(q2 + q3) + L4 * sin(q2 + q3 + q4);
+    sprintf(line,"q1234: %d %d %d %d ; %d ; %d %d", int(1000*q1), int(1000*q2), int(1000*q3), int(1000*q4), phi2, round(point[0]), round(point[1]));
     speed_points[0] = point[0];
     speed_points[1] = point[1];
     speed_points[2] = point[2];

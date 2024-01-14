@@ -15,16 +15,6 @@ import datetime
 import json
 import camera_snapshot
 import widowx_client
-# import matplotlib.pyplot as plt
-# from collections import defaultdict
-# from typing import Any, Dict, Union, NamedTuple
-# from typing import Dict, Optional
-# import transformation_utils as tr
-# import reverb
-# import tree
-# import abc
-# import dataclasses
-# @title Transformation definitions
 
 #########################################################################
 # Functions extracted from DeepMind sample code:
@@ -57,7 +47,6 @@ def get_initial_state(config):
     init_state = json.loads(config["initial_state"])
     print("init_state", init_state)
     return init_state
-
 
 ###################################################3
 # Start code for dataset trajectory example derived from:
@@ -115,19 +104,15 @@ policy_state = tfa_policy.get_initial_state(batch_size=1)
 # Run inference using the policy
 action = tfa_policy.action(tfa_time_step, policy_state)
 
-# Create a dataset object to obtain episode from
-# bridge_ds_name = config["bridge_ds_name"]
-# bridge_dir = config["bridge_ds_dir"]
-
 #######################################
 # Move to initial positions and then take snapshot image
 #######################################
 robot_camera = None
+robot_camera = camera_snapshot.CameraSnapshot()
+time.sleep(2)
 robot_images = []
 robot_arm =  widowx_client.WidowX()
-
 robot_arm.move_to_position("To Point")
-robot_camera = camera_snapshot.CameraSnapshot()
 
 #########################################################
 # Move to Initial Arm Position as taken from config file
@@ -179,15 +164,15 @@ while True:
   observation['natural_language_instruction'] = config['language_instruction']
   observation['image'] = robot_image
 
-  # normalize observation state
+  # normalize observation state for saving in dataset
   s = []
-  s.append((state["x"]/127.0))
-  s.append((state["y"]/127.0))
-  s.append((state["z"]/127.0))
-  s.append((state["gamma"]/255.0))
-  s.append((state["rot"]/255.0))
+  s.append((robot_arm.state["x"]/127.0))
+  s.append((robot_arm.state["y"]/127.0))
+  s.append((robot_arm.state["z"]/127.0))
+  s.append((robot_arm.state["gamma"]/255.0))
+  s.append((robot_arm.state["rot"]/255.0))
   s.append(0)
-  s.append(state["gripper"])
+  s.append(robot_arm.state["gripper"])
   # ts is timestep
   tfa_time_step = ts.transition(observation, reward=np.zeros((), dtype=np.float32))
   
@@ -216,15 +201,52 @@ while True:
   print("wv:", wv)
   
   ############################################################
-  # Move the robot based on predicted action and take snapshot
+  # Rescale the predicted action for the Bridge Dataset 
+  # and Widowx 250 arm. 
   ############################################################
   # denormalize action 
-  # widowx has 41cm horizontal reach and 55cm verticle (up)
-  vx = min(max(-127, round(wv[x] * 127.0 / 1.75)), 127)
-  vy = min(max(-127, round(wv[y] * 127.0 / 1.75)), 127)
-  vz = min(max(-127, round(wv[z] * 127.0 / 1.75)), 127)
-  vg = min(max(-255, round(euler[0] * 255.0 / 1.4)), 255)
-  vq5 = min(max(-255, round(euler[1] * 256.0 / 1.4)), 255)
+  # widowx has 41cm horizontal reach and 55cm verticle (up).
+  # We use the Bridge dataset scale factor even with the different
+  # arm sizes.
+  #
+  # Per the paper, they scale each action dimension to range -1 and 1 
+  # and use a vocabulary size of 256 to tokenize the actions.
+  #
+  # The World Vector is the center of the gripper.
+  # The action represents the change in the World Vector.
+  # The arm action moves to follow the change in world vector.
+  #
+  # From the minimal example from DeepMind, the Bridge Dataset
+  # is rescaled as follows:
+  # -1.76 < resc_wv_actions = ((actions + 0.05) * 3.5 / .1 - 1.75) < 1.76
+  # -1.41  < resc_rot_actions = ((actions + .25) * 5.6 - 1.4) < 1.41
+  #
+  # When communicating with the WidowX, the above values are encoded:
+  # -127 <= resc_wv_action <= 127  
+  # -255 <= resc_rot_action <= 255  
+  #
+  # The Bridge rescale wv and rot rescale values (1.75 & 1.4) are 
+  # known by the Controller to decode the wv/rot actions.
+
+  # step 1: rescale to bridge dataset values
+  vx = min(max(-1.75, ((wv[x] + 0.05) * 35 - 1.75)), 1.75)
+  vy = min(max(-1.75, ((wv[y] + 0.05) * 35 - 1.75)), 1.75)
+  vz = min(max(-1.75, ((wv[z] + 0.05) * 35 - 1.75)), 1.75)
+  vg = min(max(-1.4, ((euler[0] + 0.25) * 5.6 - 1.4)), 1.4)
+  vq5 = min(max(-1.4, ((euler[1] + 0.25) * 5.6 - 1.4)), 1.4)
+  print("scale 1:", vx,vy,vz,vg,vq5)
+
+  # step 2: Encode to [-127, 127] and [-255, 255]
+  vx = min(max(-127, round(vx * 127.0 / 1.75)), 127)
+  vy = min(max(-127, round(vy * 127.0 / 1.75)), 127)
+  vz = min(max(-127, round(vz * 127.0 / 1.75)), 127)
+  vg = min(max(-255, round(vg * 255.0 / 1.4)), 255)
+  vq5 = min(max(-255, round(vq5 * 255.0 / 1.4)), 255)
+  print("scale 2:", vx,vy,vz,vg,vq5)
+
+  ############################################################
+  # Move the robot based on predicted action and take snapshot
+  ############################################################
   [success, err_msg] = robot_arm.move(vx, vy, vz, vg, vq5, gripper_open)
   if not success:
     print("Bad start point", px, py, pz, pg, pq5, gripper_open)

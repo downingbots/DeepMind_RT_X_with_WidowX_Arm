@@ -79,6 +79,7 @@ public:
 
     //Move Arm
     void movePointWithSpeed(int vx, int vy, int vz, int vg, long initial_time);
+    void movePointWithSpeed(float vx, float vy, float vz, float vg, long initial_time);
     void moveArmWithSpeed(int vx, int vy, int vz, int vg, long initial_time);
     void moveArmQ4(float Px, float Py, float Pz);
     void moveArmQ4(float Px, float Py, float Pz, int time);

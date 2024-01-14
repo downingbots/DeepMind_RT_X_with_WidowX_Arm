@@ -10,6 +10,7 @@ import json
 import regex as re
 import shutil
 import subprocess
+import numpy as np
 
 from threading import Timer
 from ctypes import c_uint8 as unsigned_byte
@@ -29,8 +30,13 @@ class WidowX(object):
           except:
             self.widowx = serial.Serial('/dev/ttyUSB1', 115200, timeout=40)
           [success, err_msg] = self.wait_for_ok(True)
+        print("read ok")
         time.sleep(1)
         self.widowx.write(b'ok\n')
+
+        # time.sleep(1)
+        # print("Final handshake.")
+        # self.wait_for_ok(True)
         # print("Press PS Button to start!")
 
     def read_config(self):
@@ -100,11 +106,17 @@ class WidowX(object):
             for i,char in enumerate(line[6:].split(b',')):
               # note: self.state is not normalized.
               if i == 0:
-                self.state["x"] = int(char)
+                self.state["x"] = int(char) & 0x7F
+                if int(char) >> 7: 
+                  self.state["x"] -= 128
               elif i == 1:
-                self.state["y"] = int(char)
+                self.state["y"] = int(char) & 0x7F
+                if int(char) >> 7: 
+                  self.state["y"] -= 128
               elif i == 2:
-                self.state["z"] = int(char)
+                self.state["z"] = int(char) & 0x7F
+                if int(char) >> 7: 
+                  self.state["z"] -= 128
               elif i == 3:
                 self.state["gamma"] = int(char)
               elif i == 4:
@@ -142,11 +154,11 @@ class WidowX(object):
 
     def send_msg(self, vx,vy,vz, vgamma, vq5, lB):
         msg = "%d,%d,%d,%d,%d,%d" %(vx,vy,vz, vgamma, vq5, lB)
-        print("msg:", msg)
+        print("msg",msg)
         while True:
           if not self.debug and self.widowx.in_waiting:
-            for char in msg.split(","):
-                self.widowx.write(unsigned_byte(int(char)))
+            xs = [np.uint8(vx),np.uint8(vy),np.uint8(vz), np.uint8(vgamma), np.uint8(vq5), np.uint8(lB)]
+            self.widowx.write(xs)
             break
           else:
             print("msg not sent")

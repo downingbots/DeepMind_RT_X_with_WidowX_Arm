@@ -35,7 +35,7 @@ SOFTWARE.
 
 WidowX widow = WidowX();
 
-byte buff[NUM_CHARS]; //buffer to save the message
+uint8_t buff[NUM_CHARS]; //buffer to save the message
 char ln[200]; // debugging
 uint8_t open_close, close, options;
 uint8_t moveOption = USER_FRIENDLY;
@@ -89,10 +89,7 @@ void setup() {
   {
       while (!Serial.available());
   }
-  delay(1000);
-  widow.printState();
   Serial.println("ok");
-
 }
 
 void loop() {
@@ -103,20 +100,42 @@ void loop() {
     options = buff[5] & 0xF; //Get options bits 0b1111
     if (options == 0) //No given option (higher priority)
     {
-        vx = buff[0] & 0x7F;
-        if (buff[0] >> 7)
-            vx = -vx;
+        vx = buff[0];
+        vx = vx & 0x7F;
+        uint8_t neg = buff[0];
+        if (buff[0] == 129) {
+            vx = -127;
+        } else if (neg >> 7)
+          if (buff[0] == 127) {
+            vx = -127;
+          } else
+            vx = vx - 128;
 
-        vy = buff[1] & 0x7F;
-        if (buff[1] >> 7)
-            vy = -vy;
+        vy = buff[1];
+        vy = vy & 0x7F;
+        neg = buff[1];
+        if (buff[1] == 129) {
+            vy = -127;
+        } else if (neg >> 7)
+          if (buff[1] == 127)
+            vy = -127;
+          else
+            vy = vy - 128;
 
-        vz = buff[2] & 0x7F;
-        if (buff[2] >> 7)
-            vz = -vz;
+        vz = buff[2];
+        vz = vz & 0x7F;
+        neg = buff[2];
+        if (buff[2] == 129) {
+            vz = -127;
+        } else if (neg >> 7)
+          if (buff[2] == 127)
+            vz = -127;
+          else
+            vz = vz - 128;
 
-        vg = buff[3];
+        vg  = buff[3];
         vq5 = buff[4];
+        // uint8_t lB  = buff[5];
 
         if (buff[5] >> 7) //Sg
             vg = -vg;
@@ -130,23 +149,31 @@ void loop() {
         if (vx || vy || vz || vg)
         {
           if(moveOption == POINT_MOVEMENT) {
-            widow.movePointWithSpeed(vx, vy, vz, vg, initial_time);
+            sprintf(ln, "MPWS: vx vy vz vg %d %d %d %d", vx, vy, vz, vg);
+            Serial.println(ln);
+            float fvx = min(max(-1.75, (float(vx) / 127.0 * 1.75)), 1.75);
+            float fvy = min(max(-1.75, (float(vy) / 127.0 * 1.75)), 1.75);
+            float fvz = min(max(-1.75, (float(vz) / 127.0 * 1.75)), 1.75);
+            float fvg = min(max(-1.4, (float(vg) / 255.0 * 1.4)), 1.4);
+            widow.movePointWithSpeed(fvx, fvy, fvz, fvg, initial_time);
+
           } else if(moveOption == MOVE_TO_POINT) {
             Serial.println("moveArmGamma");
-            float fvx = 1.0 * vx;
-            float fvy = 1.0 * vy;
-            float fvz = 1.0 * vz;
-            float fvg = 1.0 * vg;
+            float fvx = float(vx);
+            float fvy = float(vy);
+            float fvz = float(vz);
+            float fvg = float(vg);
             /*#######################
             # widow.moveServo2Angle(3, vg)
             # delay(3000);
             # widow.moveArmQ4(vx, vy, vz);
             # delay(5000);
             #######################*/
-            delay(3000);
+            // delay(3000);
             widow.moveArmGammaController(fvx, fvy, fvz, fvg); 
             widow.openCloseGrip(close);
           } else if(moveOption == USER_FRIENDLY)
+            // used by joystick controller only
             widow.moveArmWithSpeed(vx, vy, vz, vg, initial_time);
         }
             
@@ -198,12 +225,6 @@ void loop() {
             break;
         }
     }
-    if (0) {
-      widow.getPoint(p);
-      sprintf(ln, "point %d %d %d\n", int(p[0]),int(p[1]),int(p[2]));
-      Serial.println(ln);
-      delay(600);
-    }
     widow.printState();
     Serial.println("ok");
     
@@ -224,9 +245,7 @@ String readStringUntil(char endchar){
   return s;
 }
 
-void readBytes(){
-  for(int i = 0; i < NUM_CHARS; i++){
-     while(!Serial.available());
-     buff[i] = (byte) Serial.read(); 
-  }
+void readBytes() {
+    while(!Serial.available());
+    Serial.readBytes(buff, NUM_CHARS);
 }
