@@ -1,6 +1,6 @@
 # USING DEEPMIND'S RT-X MODEL WITH A LOW-END ROBOT ARM
 
-The purpose of the DeepMind dataset was to illustrate generalization of robot arm control by training on the largest robot dataset thus-far collected.  This repository provides a bare-bones implementation to run the RT-X Models with a low-end robot arm. The laptop code is python-only and doesn't use ROS.  Hopefully, this repository will lower the barrier of entry for others to experiment with the most advanced text-to-robot-action models currently available. This code fills in some of the gaps necessary to drive a robot arm from DeepMind's minimal example.  I am hoping that the RT-X model would be able to better generalize to a "previous generation" variation of the BridgeData hardware configuration. 
+The purpose of the DeepMind dataset was to illustrate generalization of robot arm control by training on the largest robot dataset thus-far collected.  This repository provides a bare-bones implementation to run the RT-X Models with a low-end robot arm. The laptop code is python-only and doesn't use ROS.  Hopefully, this repository will lower the barrier of entry for others to experiment with the most advanced text-to-robot-action models currently available. This code fills in some of the gaps necessary to drive a robot arm from DeepMind's minimal example.  I am hoping that the RT-X model will be able to generalize to a "previous generation" variation of the BridgeData hardware configuration. 
 
 ## BACKGROUND
 
@@ -44,7 +44,7 @@ The RT-X model appears to be properly controlling the robot arm and seems to per
   - The robot arm and its configuration is not an exact match to that used to gather much of the BridgeData dataset.  Some RT-X data may have been gathered using the WidowX Mark II robot arm, but using an overhead configuration. Most of the BridgeData dataset used a next-generation and longer low-end robot arm.  
   - The test objects and language instructions are based upon those used to gather the BridgeData dataset.  However, they were close but not exact matches.
 
-Yet, the purpose of the DeepMind dataset was to illustrate generalization of robot arm control by being trained on the largest robot dataset thus-far collected. Given the environment was just a "previous generation" variation of the BridgeData hardware configuration, I had hoped that the RT-X model would be able to better generalize.
+Yet, the purpose of the DeepMind dataset was to illustrate generalization of robot arm control by being trained on the largest robot dataset thus-far collected. Given the environment was just a "previous generation" variation of the BridgeData hardware configuration, I am hoping that the RT-X model wil be able to generalize.
 
 Note that the software captures sufficient data and images necessary to the dataset if it had performed better. 
 
