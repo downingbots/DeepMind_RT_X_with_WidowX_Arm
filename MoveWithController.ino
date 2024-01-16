@@ -89,6 +89,7 @@ void setup() {
   {
       while (!Serial.available());
   }
+  delay(1000);
   Serial.println("ok");
 }
 
@@ -98,11 +99,14 @@ void loop() {
     readBytes();
     initial_time = millis();
     options = buff[5] & 0xF; //Get options bits 0b1111
+    sprintf(ln, "options: %d", options);
+    Serial.println(ln);
     if (options == 0) //No given option (higher priority)
     {
         vx = buff[0];
         vx = vx & 0x7F;
         uint8_t neg = buff[0];
+        Serial.println("M3");
         if (buff[0] == 129) {
             vx = -127;
         } else if (neg >> 7)
@@ -110,6 +114,7 @@ void loop() {
             vx = -127;
           } else
             vx = vx - 128;
+        // Serial.println("M4");
 
         vy = buff[1];
         vy = vy & 0x7F;
@@ -122,6 +127,7 @@ void loop() {
           else
             vy = vy - 128;
 
+        // Serial.println("M5");
         vz = buff[2];
         vz = vz & 0x7F;
         neg = buff[2];
@@ -133,6 +139,7 @@ void loop() {
           else
             vz = vz - 128;
 
+        // Serial.println("M6");
         vg  = buff[3];
         vq5 = buff[4];
         // uint8_t lB  = buff[5];
@@ -144,6 +151,7 @@ void loop() {
         open_close = (buff[5] >> 4) & 0b11;
         close = (buff[5] >> 5) & 1;
         delay(5);
+        // Serial.println("M7");
         if (vq5 && moveOption != MOVE_TO_POINT)
             widow.moveServoWithSpeed(4, vq5, initial_time);
         if (vx || vy || vz || vg)

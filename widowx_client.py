@@ -33,8 +33,8 @@ class WidowX(object):
         print("read ok")
         time.sleep(1)
         self.widowx.write(b'ok\n')
+        time.sleep(1)
 
-        # time.sleep(1)
         # print("Final handshake.")
         # self.wait_for_ok(True)
         # print("Press PS Button to start!")

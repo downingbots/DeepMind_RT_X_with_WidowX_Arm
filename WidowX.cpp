@@ -469,10 +469,10 @@ void WidowX::moveServoWithSpeed(int idx, int speed, long initial_time)
 void WidowX::movePointWithSpeed(int vx, int vy, int vz, int vg, long initial_time)
 {
     int tf = millis() - initial_time;
-    speed_points[0] = max(-xy_lim, min(xy_lim, speed_points[0] + vx * Kp * tf));
-    speed_points[1] = max(-xy_lim, min(xy_lim, speed_points[1] + vy * Kp * tf));
-    speed_points[2] = max(z_lim_down, min(z_lim_up, speed_points[2] + vz * Kp * tf));
-    global_gamma = max(-gamma_lim, min(gamma_lim, global_gamma + vg * Kg * tf));
+    speed_points[0] = max(-xy_lim, min(xy_lim, speed_points[0] + float(vx) * Kp * tf));
+    speed_points[1] = max(-xy_lim, min(xy_lim, speed_points[1] + float(vy) * Kp * tf));
+    speed_points[2] = max(z_lim_down, min(z_lim_up, speed_points[2] + float(vz) * Kp * tf));
+    global_gamma = max(-gamma_lim, min(gamma_lim, global_gamma + float(vg) * Kg * tf));
     setArmGamma(speed_points[0], speed_points[1], speed_points[2], global_gamma);
 }
 
@@ -481,9 +481,10 @@ void WidowX::movePointWithSpeed(float vx, float vy, float vz, float vg, long ini
     char line[200];
     int tf = millis() - initial_time;
     
-    sprintf(line,"1000xyzg: %d %d %d %d", int(vx*1000), int(vy*1000), int(vz*1000), int(vg*1000));
+    sprintf(line,"1000xyzg: %d %d %d %d; %d %d %d %d", int(vx*1000), int(vy*1000), int(vz*1000), int(vg*1000), int(speed_points[0]*1000), int(vx * Kp * tf*1000), int(speed_points[1]*1000), int(vy * Kp * tf*1000));
     Serial.println(line);
     speed_points[0] = max(-xy_lim, min(xy_lim, speed_points[0] + vx * Kp * tf));
+// ARD: try flipping y axis for rt1 actions?
     speed_points[1] = max(-xy_lim, min(xy_lim, speed_points[1] + vy * Kp * tf));
     speed_points[2] = max(z_lim_down, min(z_lim_up, speed_points[2] + vz * Kp * tf));
     global_gamma = max(-gamma_lim, min(gamma_lim, global_gamma + vg * Kg * tf));
@@ -962,7 +963,10 @@ float WidowX::printState(const char *s1)
     char line[200];
     int p0;
 
+    Serial.println("GetPoint: b4");
     getPoint(p);
+    Serial.println("GetPoint: after");
+    
     // Serial.println(line);
     c[0] = (int)(round(p[0]));
     c[1] = (int)(round(p[1]));
@@ -989,7 +993,9 @@ float WidowX::printState(const char *s1)
 //Conversions
 float WidowX::positionToAngle(int idx, int position)
 {
-    if (idx == 0 || idx == 3 || idx == 2) //MX-28 || MX-64
+    if (idx == 0) 
+          return 0.00153435538637 * (position - 2047.5 - Q1_ADJUST);
+    else if (idx == 3 || idx == 2) //MX-28 || MX-64
     // if (idx == 3 || idx == 2) //MX-28 || MX-64
           //0 - 4095, 0.088°
           // 0° - 360°
@@ -1457,6 +1463,9 @@ uint8_t WidowX::getIK_Gamma_Controller(float Px, float Py, float Pz, float gamma
     //calculate condition for q3
     c = (pow(X, 2) + pow(Z, 2) - pow(D, 2) - pow(L3, 2)) / (2 * D * L3);
 
+    char line[200];
+    sprintf(line,"X,Z,q1,Px, Py,c: %d %d %d %d %d %d", int(X*1000), int(Z*1000), int(q1*1000), int(Px*1000), int(Py*1000), int(c*1000));
+    Serial.println(line);
     if (abs(c) > 1)
         return 1;
 
@@ -1550,6 +1559,8 @@ uint8_t WidowX::getIK_Gamma_Controller(float Px, float Py, float Pz, float gamma
         //Possible value for q2 and q4 exists. Breaks loop
         break;
     }
+    sprintf(line,"q1,q2,q3,q4: %d %d %d %d", int(q1*1000), int(q2*1000), int(q3*1000), int(q4*1000));
+    Serial.println(line);
 
     //Save articular values into the array that will set the next positions
     desired_angle[0] = q1;
