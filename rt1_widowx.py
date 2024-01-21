@@ -110,7 +110,10 @@ action = tfa_policy.action(tfa_time_step, policy_state)
 robot_camera = None
 robot_camera = camera_snapshot.CameraSnapshot()
 time.sleep(2)
+# first snapshot isn't properly tuned; take snapshot & throw away.
+im, im_file, im_time = robot_camera.snapshot(True)
 robot_images = []
+# init robot arm
 robot_arm =  widowx_client.WidowX()
 # initialize by starting from Rest Position
 robot_arm.move_to_position("Rest")  
@@ -257,8 +260,8 @@ while True:
     exit()
   
   im, im_file, im_time = robot_camera.snapshot(True)
-  im = Image.fromarray(np.array(im))
-  robot_images.append(im)
+  robot_image = Image.fromarray(np.array(im))
+  robot_images.append(robot_image)
   
   observation = tf_agents.specs.zero_spec_nest(tf_agents.specs.from_spec(tfa_policy.time_step_spec.observation))
   tfa_time_step = ts.transition(observation, reward=np.zeros((), dtype=np.float32))
