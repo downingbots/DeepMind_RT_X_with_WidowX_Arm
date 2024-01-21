@@ -178,7 +178,8 @@ void loop() {
             # delay(5000);
             #######################*/
             // delay(3000);
-            widow.moveArmGammaController(fvx, fvy, fvz, fvg); 
+            // widow.moveArmGammaController(fvx, fvy, fvz, fvg); 
+            widow.moveArmPick(); 
             widow.openCloseGrip(close);
           } else if(moveOption == USER_FRIENDLY)
             // used by joystick controller only

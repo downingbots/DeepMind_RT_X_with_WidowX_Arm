@@ -64,10 +64,12 @@ WidowX::WidowX()
     /* Revised based on Interbotix measurements
     : SERVOCOUNT(6), L0(9), L1(14), L2(5), L3(14),
       L4(14), D(sqrt(pow(L1, 2) + pow(L2, 2))), alpha(atan2(L1, L2)), sa(sin(alpha)),
+      ca(cos(alpha)), isRelaxed(0), DEFAULT_TIME(2000), xy_lim(43.0), z_lim_up(52.0), z_lim_down(-26.0), xy_min(10.5), 
     */
+
     : SERVOCOUNT(6), L0(12.5), L1(14.203), L2(4.825), L3(14.203),
-      L4(14.203), D(sqrt(pow(L1, 2) + pow(L2, 2))), alpha(atan2(L1, L2)), sa(sin(alpha)),
-      ca(cos(alpha)), isRelaxed(0), DEFAULT_TIME(2000), xy_lim(43.0), z_lim_up(52.0), z_lim_down(-26.0),
+      L4(16), D(sqrt(pow(L1, 2) + pow(L2, 2))), alpha(atan2(L1, L2)), sa(sin(alpha)),
+      ca(cos(alpha)), isRelaxed(0), DEFAULT_TIME(2000), xy_lim(43.0), z_lim_up(52.0), z_lim_down(0.0), xy_min(10.5), 
       gamma_lim(M_PI_2), Kp(60.0 / 127000), Kg(M_PI_2 / 255000), Ks(1024.0 / 255000)
 {
 
@@ -203,6 +205,11 @@ void WidowX::getCurrentPosition(uint8_t until_idx)
     }
 }
 
+// ALWAYS USE to SetPosition as a layer on top of ax12 SetPosition library.
+// The Position to servo id [0] is a lie.  Under the covers, it transparently adjusts 
+// the 0 position to reflect Arm mounting position errors/adjustments.
+// This way, the logic for angles is automatically taken into account and
+// servo id 0 can be treated like other servos.
 void WidowX::SetPosition2(int servo_id, int pos)
 {
     if (servo_id == id[0]) {
@@ -480,15 +487,26 @@ void WidowX::movePointWithSpeed(float vx, float vy, float vz, float vg, long ini
 {
     char line[200];
     int tf = millis() - initial_time;
+    int too_close = 0;   // too close to the base
     
-    sprintf(line,"1000xyzg: %d %d %d %d; %d %d %d %d", int(vx*1000), int(vy*1000), int(vz*1000), int(vg*1000), int(speed_points[0]*1000), int(vx * Kp * tf*1000), int(speed_points[1]*1000), int(vy * Kp * tf*1000));
+    sprintf(line,"1000xyzg: %d %d %d %d; %d:%d %d:%d %d:%d %d:%d", int(vx*1000), int(vy*1000), int(vz*1000), int(vg*1000), int(speed_points[0]*1000), int(vx * Kp * tf*1000), int(speed_points[1]*1000), int(vy * Kp * tf*1000), int(speed_points[2]*1000), int(vz * Kp * tf*1000), int(global_gamma*1000), int(vg * Kg * tf*1000));
     Serial.println(line);
-    speed_points[0] = max(-xy_lim, min(xy_lim, speed_points[0] + vx * Kp * tf));
-// ARD: try flipping y axis for rt1 actions?
-    speed_points[1] = max(-xy_lim, min(xy_lim, speed_points[1] + vy * Kp * tf));
+    if (sqrt(pow(speed_points[0],2) + pow(speed_points[1],2)) < xy_min) 
+      too_close = 1;    
+    if ((too_close == 0) or (too_close == 1 and vx * speed_points[0] > 0)) {
+      // if not too close to base 
+      // or (too close and trying to move away from base)
+      speed_points[0] = max(-xy_lim, min(xy_lim, speed_points[0] + vx * Kp * tf));
+    } 
+    if ((too_close == 0) or (too_close == 1 and vy * speed_points[1] > 0)) {
+      // vy and speedpoints both pos or both neg
+      speed_points[1] = max(-xy_lim, min(xy_lim, speed_points[1] + vy * Kp * tf));
+    }
     speed_points[2] = max(z_lim_down, min(z_lim_up, speed_points[2] + vz * Kp * tf));
     global_gamma = max(-gamma_lim, min(gamma_lim, global_gamma + vg * Kg * tf));
-    setArmGamma(speed_points[0], speed_points[1], speed_points[2], global_gamma);
+    max_delta = abs(vx) + abs(vy) + abs(vz) + abs(vg);
+    // setArmGamma(speed_points[0], speed_points[1], speed_points[2], global_gamma);
+    moveArmGammaController(speed_points[0], speed_points[1], speed_points[2], -254.0);
 }
 
 /*
@@ -595,41 +613,75 @@ void WidowX::moveArmGamma(float Px, float Py, float Pz, float gamma)
  * It interpolates the step using a cubic interpolation with the default time.
  * If there is no solution for the IK, the arm does not move and a message is printed into the serial monitor.
 */
-void WidowX::moveArmGammaController(float Px, float Py, float Pz, float gamma)
+void WidowX::moveArmPick(float q1Angle)
 {
-    uint8_t failure; 
-    int dp;
-    int variation = 0;
-    int low_gm = 0;
-    int gm = abs(int(gamma));
-    int best_gm = -1;
-    int best_var = -1;
-    int high_gm = abs(int(gamma)) + 1;
     char line[200];
     float wristAngle, prev_wristAngle;
-    float Rd[3][3];
 
     if (isRelaxed)
         torqueServos();
 
     getCurrentPosition();
 
-    wristAngle = asin(gamma / 255.0);
+    float gamma = -253.0;
+    wristAngle = asin(gamma / 254.0);
     Serial.println("moveCenter");
     moveCenter();
     delay(2000);
     getCurrentPosition();
-    moveServo2Angle(3, wristAngle);
+    moveServo2Angle(3, q1Angle);
 
     sprintf(line,"wristAngle*1000: %d %d", int(gamma), int(1000*wristAngle));
     Serial.println(line);
     delay(2000);
     printState("CenterGamma:");
+    moveServo2Angle(3, wristAngle);
+
+    moveServo2Angle(0, q1Angle);
     updatePoint();
+    return;
+}
+
+void WidowX::moveArmGammaController(float Px, float Py, float Pz, float gamma)
+{
+    uint8_t failure;
+    int dp;
+    int variation = 0;
+    int stop_after_variation = 1;
+    int low_gm = 0;
+    int gm = abs(int(gamma));
+    float gm2;
+    int best_gm = -1;
+    int best_var = -1;
+    int high_gm = abs(int(gamma)) + 1;
+    char line[200];
+    float wristAngle, prev_wristAngle;
+    float Rd[3][3];
+         
+    for (int g = 1; g < 60; g++) {
+        // -1.919 is gamma's lower limit
+        gm2 = (255.0 + pow(-1,g%2) * float(g));
+        wristAngle = (float(gm2) / 255.0) * M_PI / 2.0;
+        failure = getIK_Gamma_Controller(Px, Py, Pz, wristAngle);
+        if (failure) {
+          sprintf(line,"getIK_Gamma_Controller fails: %d %d", g, int(1000*wristAngle));
+          Serial.println(line);
+        } else {
+          sprintf(line,"getIK_Gamma_Controller succeeds: %d %d", g, int(1000*wristAngle));
+          Serial.println(line);
+          interpolate(DEFAULT_TIME);  // sets the desired pos
+          delay(5000);
+          updatePoint();
+          break;
+        }
+    }
     return;
 
     /***********************************************************/
     /* binary search to find closest gamma with an IK solution */
+    /* A much simpler algorithm above is currently used instead*/
+    /* of the binary search (below) originally used.           */
+    /***********************************************************/
     while (true) {
       if (gamma < 0)
         wristAngle = asin(-gm / 255.0);
@@ -693,6 +745,10 @@ void WidowX::moveArmGammaController(float Px, float Py, float Pz, float gamma)
           dp = int( 255 * sin(desired_angle[3]));
           sprintf(line,"fbinsrch: %d,%d,%d, %d", low_gm, gm, high_gm, dp);
           Serial.println(line);
+          if (stop_after_variation)        //  Stop searches
+            break;
+
+          // Reset and go to next variation
           variation += 1;              /* try another way      */
           low_gm = 0;                  /* reset                */
           gm = abs(int(gamma));             /* reset                */
@@ -706,6 +762,11 @@ void WidowX::moveArmGammaController(float Px, float Py, float Pz, float gamma)
         if (gm == 0) {
           // Error
           Serial.println("No solution for IK variation!");
+          if (stop_after_variation)
+            //  failure; stop searches
+            return;
+
+          // Reset and go to next variation
           variation += 1;              /* try another way      */
           low_gm = 0;                  /* reset                */
           gm = abs(int(gamma));             /* reset                */
@@ -747,18 +808,19 @@ void WidowX::moveArmGammaController(float Px, float Py, float Pz, float gamma)
         Serial.println("BEST: getIK_Q4");
         delay(3000);
         failure = getIK_Q4(Px, Py, Pz);
-        if (failure) {
-          Serial.println("best getIK_Q4 failed!");
+      }
+      if (failure) {
+          Serial.println("moveArmGammaController failed!");
           moveRest();
           delay(3000);
           return;
-        }
       }
     }
 
     interpolate(DEFAULT_TIME);  // sets the desired pos
     delay(5000);
     updatePoint();
+    return;
 }
 
 /**
@@ -963,14 +1025,13 @@ float WidowX::printState(const char *s1)
     char line[200];
     int p0;
 
-    Serial.println("GetPoint: b4");
+    // Serial.println("GetPoint: b4");
     getPoint(p);
-    Serial.println("GetPoint: after");
+    // Serial.println("GetPoint: after");
     
-    // Serial.println(line);
-    c[0] = (int)(round(p[0]));
-    c[1] = (int)(round(p[1]));
-    c[2] = (int)(round(p[2]));
+    c[0] = (int)(round(p[0] * 3));
+    c[1] = (int)(round(p[1] * 3));
+    c[2] = (int)(round(p[2] * 3));
     wrist_angle = int(sin(getServoAngle(3)) * 255); 
     wrist_rot   = int(sin(getServoAngle(4)) * 255);
     grip        = cos(getServoAngle(5));
@@ -991,17 +1052,27 @@ float WidowX::printState(const char *s1)
 }
 
 //Conversions
-float WidowX::positionToAngle(int idx, int position)
+
+// Returns angle for non-adjusted real position.
+// Should not be used as position is transparently adjusted under the covers.
+// Note: real middle Servo 0 pos = (2047.5 + Q1_ADJUST);
+/*
+float WidowX::positionToAngle2(int idx, int position)
 {
     if (idx == 0) 
           return 0.00153435538637 * (position - 2047.5 - Q1_ADJUST);
-    else if (idx == 3 || idx == 2) //MX-28 || MX-64
-    // if (idx == 3 || idx == 2) //MX-28 || MX-64
-          //0 - 4095, 0.088°
+    else
+          return positionToAngle(int idx, int position)
+}
+*/
+
+float WidowX::positionToAngle(int idx, int position)
+{
+    if (idx == 0 || idx == 3 || idx == 2) //MX-28 || MX-64
+          // 0 - 4095, 0.088°
           // 0° - 360°
           return 0.00153435538637 * (position - 2047.5);
     else if (idx == 1)
-    // else if (idx == 1 || idx == 0)
           //0 - 4095, 0.088°
           // 0° - 360°
           return -0.00153435538637 * (position - 2047.5);
@@ -1010,6 +1081,19 @@ float WidowX::positionToAngle(int idx, int position)
           //0° - 300°
           return 0.00511826979472 * (position - 511.5);
 }
+
+// Returns non-adjusted real servo position.
+// DO NOT USE. position is transparently adjust under the covers.
+// Note: real middle Servo 0 pos = (2047.5 + Q1_ADJUST);
+/*
+int WidowX::angleToPosition2(int idx, float angle)
+{
+    if (idx == 0)
+        return round(651.739492 * angle + (2047.5 + Q1_ADJUST));
+    else
+        return angleToPosition(idx, angle);
+}
+*/
 
 int WidowX::angleToPosition(int idx, float angle)
 {
@@ -1021,7 +1105,6 @@ int WidowX::angleToPosition(int idx, float angle)
             angle += 2 * M_PI;
     }
     if (idx == 0 || idx == 3 || idx == 2) //MX-28 || MX-64
-    // if (idx == 3 || idx == 2) //MX-28 || MX-64
         //0 - 4095, 0.088°
         // 0° - 360°
         // return (int)651.74 * angle + 2048;
@@ -1052,12 +1135,11 @@ void WidowX::updatePoint()
     phi2 = D * cos(alpha + q2) + L3 * cos(q2 + q3) + L4 * cos(q2 + q3 + q4);
     global_gamma = -q2 - q3 - q4;
 
-    Serial.println(line);
-
     point[0] = cos(q1) * phi2;
     point[1] = sin(q1) * phi2;
     point[2] = L0 + D * sin(alpha + q2) + L3 * sin(q2 + q3) + L4 * sin(q2 + q3 + q4);
-    sprintf(line,"q1234: %d %d %d %d ; %d ; %d %d", int(1000*q1), int(1000*q2), int(1000*q3), int(1000*q4), phi2, round(point[0]), round(point[1]));
+    sprintf(line,"q1234: %d %d %d %d ; %d ; %d %d %d", int(1000*q1), int(1000*q2), int(1000*q3), int(1000*q4), phi2, round(point[0]), round(point[1]), round(point[2]));
+    Serial.println(line);
     speed_points[0] = point[0];
     speed_points[1] = point[1];
     speed_points[2] = point[2];
@@ -1199,7 +1281,10 @@ void WidowX::syncWrite(uint8_t numServos)
     ax12write(2);
     for (int i = 0; i < numServos; i++)
     {
-        temp = desired_position[i];
+        if (i == 0)
+          temp = desired_position[i]-Q1_ADJUST;
+        else
+          temp = desired_position[i];
         checksum += (temp & 0xff) + (temp >> 8) + id[i];
         ax12write(id[i]);
         ax12write(temp & 0xff);
@@ -1450,123 +1535,91 @@ uint8_t WidowX::getIK_RdBase(float Px, float Py, float Pz, float RdBase[3][3])
 */
 uint8_t WidowX::getIK_Gamma_Controller(float Px, float Py, float Pz, float gamma)
 {
+    int i;
+    char line[200];
     //Calculate sine and cosine of gamma
     const float sg = sin(gamma), cg = cos(gamma);
-
     //Obtain the desired point as seen from {1}
     const float X = sqrt(pow(Px, 2) + pow(Py, 2)) - L4 * cg;
     const float Z = Pz - L0 + L4 * sg;
+    // float q3_prev = getServoAngle(2);
+    float q2a[2],q3a[2],q4a[2],xa[2],ya[2],za[2], ga[2], da[2];
+    float c3, s3;
 
     //Obtain q1
     q1 = atan2(Py, Px);
 
     //calculate condition for q3
     c = (pow(X, 2) + pow(Z, 2) - pow(D, 2) - pow(L3, 2)) / (2 * D * L3);
-
-    char line[200];
     sprintf(line,"X,Z,q1,Px, Py,c: %d %d %d %d %d %d", int(X*1000), int(Z*1000), int(q1*1000), int(Px*1000), int(Py*1000), int(c*1000));
     Serial.println(line);
     if (abs(c) > 1)
         return 1;
 
-    float q3_prev = getServoAngle(2);
-
-    float q3_1 = alpha + acos(c);
-    q3_1 = atan2(sin(q3_1), cos(q3_1));
-    float q3_2 = alpha - acos(c);
-    q3_2 = atan2(sin(q3_2), cos(q3_2));
-
-    uint8_t selection = 0;
-
-    if (abs(q3_1 - q3_prev) > abs(q3_2 - q3_prev))
+    for (i = 0; i < 2; i++)
     {
-        q3 = q3_2;
-        selection = 0;
-    }
-    else
-    {
-        q3 = q3_1;
-        selection = 1;
-    }
+        if (i == 0)
+          q3a[i] = alpha + acos(c);
+        else
+          q3a[i] = alpha - acos(c);
+        q3a[i] = atan2(sin(q3a[i]), cos(q3a[i]));
+        //Check q3 limits
+        if (q3a[i] < q3Lim[0] || q3a[i] > q3Lim[1])
+        {
+          sprintf(line,"q3 beyond limits: %d %d", i, int(q3a[i]*1000));
+          Serial.println(line);
+          za[i] = -10000000;
+          continue;
+        }
 
-    uint8_t tryTwice = 1;
-
-    //Check q3 limits
-    if (q3 < q3Lim[0] || q3 > q3Lim[1])
-    {
-        //Try with the other possible solution for q3
-        q3 = alpha + pow(-1, selection) * acos(c);
-        q3 = atan2(sin(q3), cos(q3));
-        if (q3 < q3Lim[0] || q3 > q3Lim[1])
-            return 1;
-        tryTwice = 0;
-    }
-
-    float c3, s3;
-    for (;;)
-    {
-        c3 = cos(q3);
-        s3 = sin(q3);
+        c3 = cos(q3a[i]);
+        s3 = sin(q3a[i]);
         a = D * ca + L3 * c3;
         b = D * sa + L3 * s3;
-        q2 = atan2(a * Z - b * X, a * X + b * Z);
-
-        if (q2 < q2Lim[0] || q2 > q2Lim[1])
-        {
-            if (tryTwice)
-            {
-                //Try with the other possible solution for q3
-                q3 = alpha + pow(-1, selection) * acos(c);
-                q3 = atan2(sin(q3), cos(q3));
-                if (q3 < q3Lim[0] || q3 > q3Lim[1])
-                    //One value of q3 is possible but yields out of range value for q2
-                    //and the other value of q3 exceeds q3's limits. Ends function
-                    return 1;
-
-                //Check with the other possible value of q3 if there's a solution for q2
-                tryTwice = 0;
-                continue;
-            }
-            else
-                //Possible value for q2 doesn't exist with any of q3 possible values
-                //Ends function
-                return 1;
+        q2a[i] = atan2(a * Z - b * X, a * X + b * Z);
+        if (q2a[i] < q2Lim[0] || q2a[i] > q2Lim[1]) {
+          sprintf(line,"q2 beyond limits: %d %d %d", i, int(q3a[i]*1000), int(q2a[i]*1000));
+          Serial.println(line);
+          za[i] = -10000000;
+          continue;
         }
 
-        q4 = -gamma - q2 - q3;
-
-        if (q4 < q4Lim[0] || q4 > q4Lim[1])
+        q4a[i] = -gamma - q2a[i] - q3a[i];
+        if (q4a[i] < q4Lim[0] || q4a[i] > q4Lim[1])
         {
-            if (tryTwice)
-            {
-                //Try with the other possible solution for q3
-                q3 = alpha + pow(-1, selection) * acos(c);
-                q3 = atan2(sin(q3), cos(q3));
-                if (q3 < q3Lim[0] || q3 > q3Lim[1])
-                    //One value of q3 is possible but yields out of range value for q4
-                    //and the other value of q3 exceeds q3's limits. Ends function
-                    return 1;
-
-                //Check with the other possible value of q3 if there's a solution for q4
-                tryTwice = 0;
-                continue;
-            }
-            else
-                //Possible value for q4 doesn't exist with any of q3 possible values
-                //Ends function
-                return 1;
+          sprintf(line,"q4 beyond limits: %d %d %d %d", i, int(q3a[i]*1000), int(q2a[i]*1000), int(q4a[i]*1000));
+          Serial.println(line);
+          za[i] = -10000000;
+          continue;
         }
-        //Possible value for q2 and q4 exists. Breaks loop
-        break;
+
+        //Possible value for q2 and q4 exists. Check if close to requested values
+        phi2 = D * cos(alpha + q2a[i]) + L3 * cos(q2a[i] + q3a[i]) + L4 * cos(q2a[i] + q3a[i] + q4a[i]);
+        xa[i] = cos(q1) * phi2;
+        ya[i] = sin(q1) * phi2;
+        za[i] = L0 + D * sin(alpha + q2a[i]) + L3 * sin(q2a[i] + q3a[i]) + L4 * sin(q2a[i] + q3a[i] + q4a[i]);
+        ga[i] = -q4a[i] - q2a[i] - q3a[i];
+        da[i] = sqrt(pow((xa[i]-Px),2) + pow((ya[i]-Py),2) + pow((za[i]-Pz),2) + pow((ga[i]-gamma),2));
+        sprintf(line,"q1,q2,q3,q4;xa,ya,za;da;Px,Py,Pz,G: %d %d %d %d; %d %d %d %d; %d; %d %d %d %d", int(q1*1000), int(q2a[i]*1000), int(q3a[i]*1000), int(q4a[i]*1000), int(xa[i]*1000), int(ya[i]*1000), int(za[i]*1000), int(ga[i]*1000), int(da[i]*1000), int(Px*1000), int(Py*1000), int(Pz*1000), int(gamma*1000));
+        Serial.println(line);
     }
-    sprintf(line,"q1,q2,q3,q4: %d %d %d %d", int(q1*1000), int(q2*1000), int(q3*1000), int(q4*1000));
-    Serial.println(line);
 
     //Save articular values into the array that will set the next positions
+    if (za[0] != -10000000 && (za[1] == -10000000 || (da[0] < da[1])))
+      i = 0;
+    else if (za[1] != -10000000)
+      i = 1;
+    else
+      return 1;
+    if (da[i] > max_delta) {
+      sprintf(line,"Point difference greater than max delta: %d, %d",int(da[i]*1000), int(max_delta*1000)); 
+      Serial.println(line);
+      return 1;
+    }
     desired_angle[0] = q1;
-    desired_angle[1] = q2;
-    desired_angle[2] = q3;
-    desired_angle[3] = q4;
+    desired_angle[1] = q2a[i];
+    desired_angle[2] = q3a[i];
+    desired_angle[3] = q4a[i];
     //Returns with success
     return 0;
 }

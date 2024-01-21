@@ -112,6 +112,8 @@ robot_camera = camera_snapshot.CameraSnapshot()
 time.sleep(2)
 robot_images = []
 robot_arm =  widowx_client.WidowX()
+# initialize by starting from Rest Position
+robot_arm.move_to_position("Rest")  
 robot_arm.move_to_position("To Point")
 
 #########################################################
@@ -131,6 +133,7 @@ pq5 = state["rot"]
 gripper_open = state["gripper"] 
 [success,err_msg] = robot_arm.move(px, py, pz, pg, pq5, gripper_open)
 robot_arm.move_to_position("By Point")
+
 im, im_file, im_time = robot_camera.snapshot(True)
 robot_image = Image.fromarray(np.array(im))
 robot_images.append(im)

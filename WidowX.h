@@ -53,6 +53,8 @@ public:
     void moveHome();
     void moveRest();
     void moveToPose(const unsigned int *pose);
+    void moveArmPick(float q1Angle = 0);
+
 
     //Get Information
     float printState(const char *s1 = "State:");
@@ -107,6 +109,7 @@ private:
     const int DEFAULT_TIME;
     //Limits
     const float xy_lim;     // = 43.0;
+    const float xy_min;     // = 10.5;
     const float z_lim_up;   // = 52.0;
     const float z_lim_down; // = -26.0;
     const float gamma_lim;  // = M_PI_2;
@@ -129,6 +132,7 @@ private:
     float speed_points[3];
     float global_gamma;
     float W[6][4];
+    float max_delta;
 
     //Conversions
     float positionToAngle(int idx, int position);
