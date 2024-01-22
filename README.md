@@ -20,11 +20,11 @@ According to the DeepMind paper [8], RT-1-X outperforms the original BridgeData 
 
 ## HOW TO USE:
 
-All the required source files are located in this single directory repository, but really there are two compute environments: (1) the System76 Laptop with Nvidia board and (2) the interbotix board on the WidowX Mark II Arm.
+All the required source files are located in this single-directory repository, but really there are two compute environments: (1) the System76 Laptop with Nvidia board and (2) the interbotix board on the WidowX Mark II Arm.
   
-First, download DeepMind's RT-X model.  Follow the instructions to run the Minimal Example.
+First, download DeepMind's RT-X model.  Follow the instructions to run the Minimal Example, which doesn't require a real robot arm.
 
-To run on the laptop, just execute "python rt1_widowx.py":
+Here's a brief explanation of the laptop-side code in this repository to control a real WidowX robot arm:
  - rt1_widowx.py: The laptop-side code (just execute "python rt1_widowx.py".) Largely derived from DeepMind sample code, it does the following:
    1. Sets up the RT-X model
    2. Moves the arm into an initial pose
@@ -34,18 +34,18 @@ To run on the laptop, just execute "python rt1_widowx.py":
  - camera_snapshot.py : a non-ROS version to capture a snapshot from a single realsense camera. Largely derived from the Berkeley Bridge Dataset V2 code.
 
 For the arduino IDE and the interbotix board, follow the WidowX Mark II README by Lenin Silva Gutiérrez to install or understand much of the software, but include the following customized files instead: 
- - WidowX.cpp : modified to goto initial starting point and return the state of the arm.  The initial position of the robot arm is hard-coded in a centralized pick-and-place position. Gamma values are tweeked if necessary to find an IK solution to the specified XYZ. Some guardrails were added to avoid collisions with the static base configuration.
+ - WidowX.cpp : modified to goto an initial starting point and return the state of the arm.  The initial position of the robot arm is hard-coded to a centralized pick-and-place position. Gamma values are tweeked if necessary to find an IK solution to the specified XYZ. Some guardrails were added to avoid collisions with the static base configuration.
  - WidowX.h : trivially modified.
  - MoveWithController.ino : modified to goto initial starting position, and return required state.
 
 ## RESULTS
-The RT-X model appears to be properly controlling the robot arm and seems to perform Robot arm actions inspired by the "language instruction" and the image. Unfortunately, it appears to be pure luck if it actually performs a successful action.  Potential reasons for this:
+The RT-X model appears to be properly controlling the robot arm and seems to perform Robot arm actions inspired by the "language instruction" and the image. Unfortunately, it is very unlikely that it performs a successful action.  Potential reasons for this:
   - The robot arm and its configuration is not an exact match to that used to gather much of the BridgeData dataset.  Some RT-X data may have been gathered using the WidowX Mark II robot arm, but using an overhead configuration. Most of the BridgeData dataset used a next-generation and longer, thinner, low-end robot arm.  
   - The test objects and language instructions are based upon those used to gather the BridgeData dataset.  However, they were close but not exact matches.
   - "The current RT-1-X model, without finetuning, would only be expected to work well in settings from the training dataset, e.g. a reproduction of the BridgeV2 setup could work out of the box. It is unlikely the model would work well 0-shot on visually very different environments..." [9]   Attempts by others to replicate picking up a cube also failed.
   - Bugs in my code are still being found, but it generally seems to be working as instructed by RT-X.
 
-Yet, the purpose of the DeepMind dataset was to illustrate generalization of robot arm control by being trained on the largest robot dataset thus-far collected. Given the environment was just a "previous generation" variation of the BridgeData hardware configuration, I was hoping that the RT-X model would be able to generalize.  Fine-tuning using the Octo model to be used with this WidowX Mark II hardware configuration might be a reasonable next step.[10] The software in this repository can be easily extended to capture the data and imagest using simple joystick controller to create a dataset for fine-tuning the Octo model. The Octo model has been used with the Aloha teleoperation configuration.[11] 
+Yet, the purpose of the DeepMind dataset was to illustrate generalization of robot arm control by being trained on the largest robot dataset thus-far collected. Given the environment was just a "previous generation" variation of the BridgeData hardware configuration, I was hoping that the RT-X model would be able to generalize.  Fine-tuning using the Octo model to be used with this WidowX Mark II hardware configuration might be a reasonable next step.[10] The software in this repository can be easily extended to capture the data and image dataset using a simple joystick controller for fine-tuning the Octo model. The Octo model has been used with the Aloha teleoperation configuration.[11] 
 
 ## REFERENCES:
 
